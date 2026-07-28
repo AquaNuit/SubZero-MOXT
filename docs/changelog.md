@@ -3,6 +3,46 @@
 Format: one entry per working session/phase, newest first. Notable
 decisions belong in `agent_handoff.md` too.
 
+## [Phase 3] — 2026-07-28
+
+Linux tools + execution engine. Still zero runtime dependencies; 53 new
+tests (121 total), all passing.
+
+### Added
+- `tools/base.py` — `Tool` ABC, `ParamSpec` typed params with coercion,
+  `ToolResult` carrying recovery `failure_class`, `ToolExecutor` (single
+  call path: validate → gate → run; nothing raises across the boundary),
+  injectable runner protocol + `async_subprocess_runner` (process-group
+  kill on timeout).
+- `tools/registry.py` — registration-time enforcement (explicit
+  `hard_gate` bool, unique name, description, well-formed params —
+  violations refused loudly) + planner-facing `catalog()`.
+- `tools/shell.py`, `tools/filesystem.py`, `tools/git.py`,
+  `tools/python_exec.py` — the order-1 tools (all `hard_gate: false`).
+- `tools/package_managers.py` — distro detection (/etc/os-release ID →
+  ID_LIKE → flatpak/snap probe), command adaptation for 5 managers,
+  dry-run mode (spec §8).
+- `tools/docker.py` — container management; daemon unavailability is a
+  structured `environment` failure.
+- Tests: `test_tools_registry.py` (16: registration refusals, param
+  typing, executor incl. full gated flow through the real enforcer),
+  `test_tools_exec.py` (15: real hermetic shell/fs/git/python runs),
+  `test_package_managers.py` (14: detection, commands, dry-run, real
+  dpkg check), `test_docker.py` (6), `test_phase3_acceptance.py` (the
+  spec §10 acceptance, scheduler-driven).
+
+### Decisions
+- Executor gate kwargs are `gate_action`/`gate_target` so tool params may
+  be named `action`/`target` (collision found by the acceptance test).
+- A gated tool called on an executor WITHOUT an enforcer is refused
+  (`environment` failure) — never executed. The gate has exactly one
+  implementation (kernel enforcer); the executor is its only caller.
+- `is_installed` failure classifies as `logic` ("not there", an answer),
+  failed install as `environment` (mirror/network/permissions).
+- Phase 3 acceptance runs 2-distro coverage as production code paths
+  (real detection strings + recording runners) since the sandbox has one
+  distro and no root — documented in the test.
+
 ## [Phase 2] — 2026-07-28
 
 Memory/context system + workspace indexer. Still zero runtime dependencies;

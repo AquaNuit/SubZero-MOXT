@@ -88,7 +88,7 @@ Requirements: **Python 3.11+**. Nothing else — Phase 1 has zero runtime
 dependencies (stdlib only).
 
 ```bash
-# Run the full test suite (68 tests)
+# Run the full test suite (121 tests)
 python3 -m unittest discover -s tests -t . -v
 ```
 
@@ -108,7 +108,7 @@ budget). No test requires a live Ollama daemon.
 |-------|-------|--------|
 | 1 | Kernel + provider interface | **Done** — 35/35 tests pass |
 | 2 | Memory / context + workspace indexer | **Done** — 33/33 tests pass (68 total) |
-| 3 | Linux tools | Planned |
+| 3 | Linux tools + execution engine | **Done** — 53/53 tests pass (121 total) |
 | 4 | Coding agent workflow | Planned |
 | 4.5 | Notifier/Command layer, NIM key pool, remaining providers, recovery upgrade | Planned |
 | 5 | Browser automation | Planned |

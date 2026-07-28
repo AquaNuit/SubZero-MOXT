@@ -1,77 +1,90 @@
 # Tool API
 
-**Status: contract fixed (Phase 1, via the hard-gate enforcer); tool
-implementations start in Phase 3.**
+**Status: BUILT (Phase 3, 2026-07-28)** — registry, executor, and the six
+Phase 3 tools. Browser arrives Phase 5; Ghidra bridge Phase 5.5; active
+security tooling is `hard_gate: true` only, always (spec §1.4).
 
-## The interface
+## The interface (`tools/base.py`)
 
-Every tool — built-in or plugin — exposes:
+Every tool — built-in or plugin — subclasses `Tool` and declares:
 
 | Member | Type | Notes |
 |--------|------|-------|
 | `name` | `str` | Stable, unique (registry key) |
 | `description` | `str` | What the planner reads to decide usage |
-| `parameters` | typed schema | Typed parameters; no free-form `**kwargs` at the boundary |
-| `hard_gate` | `bool` | **spec §1 — see below** |
-| `run(...)` | structured result | Raises kernel marker exceptions, never leaks tracebacks into the scheduler |
+| `params` | `list[ParamSpec]` | Typed params (str/int/float/bool) with required/default; coerced + validated before every call |
+| `hard_gate` | `bool` | **Explicit bool, required — spec §1** |
+| `run(**params)` | `async -> ToolResult` | Never raises for expected failures |
 
-## `hard_gate` — the non-negotiable part (spec §1)
+`ToolResult`: `ok`, `output`, `error`, `failure_class`
+(`transient`/`logic`/`environment`/`None` — feeds Recovery §2.3), `data`.
+`raise_for_failure()` converts a failed result into the kernel's marker
+exception for workers that want scheduler Recovery to engage.
 
-- Read-only / analysis tools (filesystem read, static
-  disassembly/decompilation of a binary already on disk, `git log`,
-  package status queries): `hard_gate: false`.
-- Tools that act against a live external target (exploit modules, crafted
-  traffic at hosts you don't control, credential spraying, that family):
-  `hard_gate: true`.
-- A `hard_gate: true` call is **never executed by the scheduler**. The
-  kernel's `HardGateEnforcer` (built, `kernel/hard_gate_enforcer.py`)
-  emits `task.needs_human` naming the exact action + target and blocks
-  until an explicit approval arrives through the Command Worker. This holds
-  even in full-autonomous mode, and there is no bypass — do not write one.
-- Tool authors do not implement gating themselves. They declare
-  `hard_gate`, and every call goes through the enforcer:
+## Registry (`tools/registry.py`)
 
-```python
-from kernel.hard_gate_enforcer import HardGateEnforcer, ToolCallSpec
+Registration-time enforcement: missing `hard_gate` (must be a real bool,
+not None), missing/duplicate name, empty description, or malformed params =
+**refused loudly at load**, not silently broken mid-task. `catalog()`
+renders the planner-facing view of every tool.
 
-enforcer.enforce(task_id, ToolCallSpec(
-    tool_name="exploit_runner",
-    action="run exploit/multi/handler",   # concrete — vague is rejected
-    target="10.0.0.5:4444",               # concrete — approval binds to it
-    hard_gate=True,
-))
-# returns: approved -> proceed; raises HardGateDenied -> surface via Recovery
-```
+## Executor — the single call path
 
-Approvals bind to the exact `tool|action|target` triple and persist in the
-kernel DB (`approvals` table), so a restart neither loses nor re-asks a
-decision.
+`ToolExecutor(registry, enforcer).execute(tool_name, *, task_id,
+gate_action, gate_target, **params)`:
 
-## Error handling
+1. **validate** — params type-checked (errors → `logic` result)
+2. **gate** — `hard_gate: true` tools ONLY: routes through the kernel
+   `HardGateEnforcer` with the concrete `gate_action`/`gate_target`
+   (vague = rejected as `logic`; denied = structured result
+   `data={"gate": "denied"}`; **no enforcer configured = refused, never
+   executed**). Ungated tools skip this entirely.
+3. **run** — exceptions become structured results (marker exceptions keep
+   their class; unknowns → `transient`); output capped at 8000 chars.
 
-Tools raise the kernel's marker exceptions (`TransientError`, `LogicError`,
-`EnvironmentFailure`) with actionable messages; the scheduler's boundary
-converts anything else into Recovery input. A tool exception must never
-crash the scheduler (tested in `tests/test_recovery.py`).
+Nothing raises out of the executor — the scheduler boundary stays clean.
 
-## Build order (spec §6)
+`gate_action`/`gate_target` are executor-level kwargs so tool parameters
+may freely be named `action`/`target` (filesystem, git, and
+package_manager all use `action`).
 
-1. **Phase 3:** filesystem, shell, git, Python execution; package managers
-   (detect distro first — apt/dnf/pacman/flatpak/snap — and adapt).
-   Phase 3 also adds Docker/container management.
-2. **Phase 5:** browser automation (Playwright): navigate, click, fill
-   forms, screenshot, download, extract structured data.
-3. **Phase 5.5:** static RE — Ghidra bridge exposing
-   decompile/disassemble/symbol-index as `hard_gate: false` (analysis of a
-   binary already on disk touches nothing external).
-4. **Active security tooling** (spec §1.4): register with
-   `hard_gate: true` and nothing more. Re-read spec §1 before touching this
-   family. The Phase 5.5 acceptance test proves a gated stub cannot execute
-   without an approval event.
+## Built-in tools (Phase 3)
 
-## Registry (Phase 3)
+All `hard_gate: false` — local operations on the agent's own machine, not
+actions against live external targets (§1 taxonomy):
 
-`tools/registry.py` maps name → tool and is the planner's catalog. The
-registry enforces the interface at registration time (missing `hard_gate`
-or untyped parameters = refused), so a malformed tool fails loudly at load,
-not silently mid-task.
+| Tool | Actions / params | Notes |
+|------|------------------|-------|
+| `filesystem` | read, write, append, list, exists, mkdir + path/content | Auto-creates parents on write |
+| `shell` | command, cwd, timeout_s | Process-group kill on timeout (`transient`) |
+| `git` | init, status, log, diff, add, commit, current_branch | Optional commit-author override |
+| `python_exec` | code XOR script_path, cwd, timeout_s | Same interpreter, subprocess isolation |
+| `package_manager` | install, remove, search, is_installed, update_index + dry_run | **Distro-adaptive**: apt/dnf/pacman/flatpak/snap via /etc/os-release (ID → ID_LIKE → binary probe) |
+| `docker` | ps, images, pull, run, stop, logs, remove | Daemon-down → structured `environment` failure |
+
+**Dry-run** (spec §8): `package_manager` with `dry_run: true` returns the
+exact command it *would* run and executes nothing — verified by test.
+
+**Runner injection**: every command-executing tool takes a `runner`
+(`async (command, cwd, timeout_s) -> Completed`) so tests assert command
+construction and flows without real subprocesses; the default is
+`async_subprocess_runner` (process-group kill on timeout).
+
+## Gated tools (Phase 5.5+)
+
+When active security tooling lands: register with `hard_gate: true`, call
+through the executor with concrete `gate_action`/`gate_target`. The
+enforcer emits `task.needs_human`, blocks, and the call proceeds only on
+explicit approval bound to the exact `tool|action|target` (already built
+and tested — `kernel/hard_gate_enforcer.py`, `tests/test_hard_gate.py`,
+executor wiring in `tests/test_tools_registry.py`). There is no bypass —
+do not write one.
+
+## Acceptance (spec §10, Phase 3) — passes
+
+`tests/test_phase3_acceptance.py`: a scheduler-run task installs a package
+through **two detected-distro code paths** (apt via Debian os-release, dnf
+via Fedora — production command adaptation asserted verbatim), writes and
+really executes a diagnostic script, commits it to a real git repo, and
+reports through the event bus. Task ends `done` with evidence in
+`result_summary`.

@@ -5,6 +5,24 @@ when it gets fixed.
 
 ## Open
 
+0.a **No audit log of tool calls yet** (spec §8). The executor is the
+   single call path, so this is one hook away; it lands with the
+   permission-modes layer. *Fix: Phase 4.5.*
+
+0.b **Dry-run exists only for `package_manager`.** Spec §8 wants dry-run
+   "where feasible"; git/filesystem/shell dry-runs are not meaningful the
+   same way, but docker `run` could preview. *Fix: as needed in Phase 4.5.*
+
+0.c **`sudo` is assumed in package commands** (`sudo apt-get ...`). On a
+   passwordless-sudo laptop this is fine; elsewhere installs will fail as
+   `environment` (correct classification, human gets a named blocker in
+   Phase 4.5). *Fix: optional privilege-escalation strategy config later.*
+
+0.d **Docker tool is tested hermetically only** (sandbox has no daemon).
+   Command construction + failure paths are asserted; the real-daemon path
+   needs a smoke test on AT's laptop. *Fix: first real run; keep an eye on
+   `docker info` probe latency.*
+
 0. **`LLMSummarizer` is synchronous** (`asyncio.run` inside `summarize`).
    Called from an async worker it hits "event loop already running" and
    falls back to the heuristic summarizer — safe, but the LLM path is

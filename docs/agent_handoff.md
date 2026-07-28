@@ -6,6 +6,108 @@ factual; if it and the code disagree, the code is right (fix this file).
 
 ---
 
+## Session 2026-07-28 (late) — Phase 3 complete
+
+### Current implementation status
+
+**Phase 3 of 7 DONE and acceptance-tested** (121/121 stdlib-unittest tests
+pass: 68 from Phases 1–2 + 53 new, ~5s). Phase 4 is next — see "Next
+recommended task".
+
+### Modules completed this session
+
+- `tools/base.py` — `Tool` ABC (name/description/`ParamSpec` params/
+  explicit `hard_gate` bool), `ToolResult` with recovery `failure_class`
+  + `raise_for_failure()`, `ToolExecutor` (validate → gate → run; the ONLY
+  tool call path; nothing raises across it), runner protocol +
+  `async_subprocess_runner` (process-group kill on timeout).
+- `tools/registry.py` — registration-time interface enforcement (refuses
+  missing gate flag/name/desc, duplicates), planner-facing `catalog()`.
+- `tools/shell.py`, `filesystem.py`, `git.py`, `python_exec.py` — the
+  order-1 tools, all `hard_gate: false`, all hermetically tested with REAL
+  runners (tmp dirs; git tested against real repos).
+- `tools/package_managers.py` — distro detection (/etc/os-release ID →
+  ID_LIKE → flatpak/snap binary probe → unknown), command adaptation for 5
+  managers, dry-run (executes nothing, returns the exact command).
+- `tools/docker.py` — ps/images/pull/run/stop/logs/remove; daemon-down →
+  structured `environment` failure.
+- Tests: `test_tools_registry.py` (16), `test_tools_exec.py` (15),
+  `test_package_managers.py` (14), `test_docker.py` (6),
+  `test_phase3_acceptance.py` (the spec §10 acceptance: install via
+  apt+dnf code paths, real script exec, real git commit, bus-reported,
+  through the Scheduler).
+- Docs: tool_api.md rewritten as-built; status/roadmap/changelog/
+  module_index/testing/known_issues/README updated.
+
+### Architecture decisions made (and why)
+
+1. **Executor gate kwargs are `gate_action`/`gate_target`** — the
+   acceptance test caught `action` colliding between executor kwargs and
+   tool params (filesystem/git/package all use `action`). Gate metadata is
+   executor-level; tool params pass through untouched.
+2. **A gated tool on an executor WITHOUT an enforcer is refused, never
+   run** (`environment` failure). The kernel enforcer remains the only
+   gate implementation; the executor is its only caller — the §1 invariant
+   now holds at the single call path, not per-tool.
+3. **Failure classification conventions for tools**: bad params/unknown
+   action/missing file → `logic` (planner's fault); timeout → `transient`;
+   permission/daemon-down/failed install → `environment`;
+   `is_installed` false → `logic` (it's an answer, not an error).
+4. **Distro multi-coverage is proven at the code-path level** in the
+   sandbox (one distro, no root): real os-release strings + recording
+   runners, verbatim command assertions. Same worker runs unchanged on
+   real multi-distro machines.
+5. **`sudo` baked into package commands** — fine for a single-user laptop
+   with passwordless sudo; failures classify `environment` (known_issue
+   0.c).
+
+### Known issues / gotchas for next session
+
+- New entries 0.a–0.d (audit log hook pending Phase 4.5, dry-run scope,
+  sudo assumption, docker hermetic-only). Full list in known_issues.md.
+- **Phase 4 is the first phase with a live model in the loop.** Keep every
+  test hermetic: fake providers implementing the Phase 1 `Provider`
+  interface (see `tests/test_provider.py` and `LLMSummarizer` tests for
+  the pattern). The planner worker must consume: WorkspaceIndexer
+  (`where_is`/`dependents_of` BEFORE asking the model where code lives —
+  Phase 4 acceptance requires indexer-first navigation), ToolExecutor,
+  WorkingMemory/Retriever, ContextPressureMonitor.
+- `LLMSummarizer` is sync-only; the planner worker is async — either use
+  HeuristicSummarizer in the worker or add `async_summarize` (known_issue 0).
+
+### Performance observations
+
+- 121 tests in ~5.0s (real subprocess spawning in tool tests added ~1s).
+  Tool calls themselves: subprocess spawn overhead only. No new
+  steady-state footprint; VRAM still untouched.
+
+### Next recommended task
+
+**Phase 4: Coding agent workflow (plan/edit/test/debug loop)**, spec §6
+order + §10. This is the payoff phase: an LLM-driven worker that fixes a
+seeded bug end-to-end unattended.
+
+Suggested shape:
+1. `agent/` (new top-level package — update §9 tree in docs) with
+   `planner.py` (provider → structured plan: steps + files),
+   `coding_worker.py` (the Scheduler `worker` impl): assemble via
+   WorkingMemory → indexer queries first (log/emit how many LLM calls
+   were avoided) → plan → edit loop (filesystem/python_exec/shell tools
+   via ToolExecutor) → run tests → debug on failure (bounded iterations)
+   → compress on close (Phase 2 machinery).
+2. Everything behind fake providers in tests: script the planner's
+   outputs (plan JSON, edit diffs, test-fix iterations).
+3. Acceptance (spec §10): seeded bug in a small tmp repo fixed
+   end-to-end by the scheduler-driven worker, using `where_is`/
+   `dependents_of` instead of a fresh full-repo scan — assert indexer
+   queries happened BEFORE the first provider call and that no full-tree
+   read occurred (instrument both).
+
+Write the acceptance test first. **Do not start Phase 4.5 in the same
+session unless Phase 4's acceptance passes.**
+
+---
+
 ## Session 2026-07-28 (evening) — Phase 2 complete
 
 ### Current implementation status

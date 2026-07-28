@@ -7,7 +7,7 @@ phase's acceptance test must pass before the next phase starts.
 |-------|-------------|-----------------|--------|
 | 1 | Kernel: task graph + scheduler + event bus (versioned, durable) + provider interface (local Ollama only) | Kill/restart mid-task → resume with no re-prompt; event survives a bus restart | **DONE (35/35 tests)** |
 | 2 | Memory/context system + workspace indexer | Run a task long enough to force a compression pass; active context stays bounded; indexer updates only the changed file's subgraph | **DONE (68/68 tests)** |
-| 3 | Linux tools + execution engine | Agent installs a package, runs a script, reports result, on 2+ distros | Not started |
+| 3 | Linux tools + execution engine | Agent installs a package, runs a script, reports result, on 2+ distros | **DONE (121/121 tests)** |
 | 4 | Coding agent workflow (plan/edit/test/debug loop) | Agent fixes a seeded bug in a small repo end-to-end unattended, using the workspace indexer instead of a fresh full-repo scan | Not started |
 | 4.5 | Notifier/Command layer + NIM key pool + remaining providers + Recovery Manager failure classification | Pull the network cable on the main NIM key mid-task → pool fails over; approve/deny a `needs_human` from Telegram; force transient vs logic failure → different recovery paths | Not started |
 | 5 | Browser automation | Agent completes a multi-step web task (navigate, fill form, screenshot) unattended | Not started |
@@ -29,8 +29,9 @@ phase's acceptance test must pass before the next phase starts.
 - **`config/routing.yaml` is written** (spec §4) but unread until the
   router lands in Phase 4.5 — keeping the table as config from day one
   avoids hardcoded routing creeping into Phase 2–4 code.
-- **Phase 3 next** (Linux tools + execution engine). Phase 2 delivered the
-  indexer + compression prerequisites for Phase 4's acceptance test. Phase
-  3 introduces the tool registry — the `hard_gate` contract per tool gets
-  enforced at registration time (interface already fixed in
-  `docs/tool_api.md`; enforcer already built and tested).
+- **Phase 4 next** (coding agent workflow). All prerequisites now exist:
+  the workspace indexer (Phase 2) for indexer-first navigation, the tool
+  executor (Phase 3) for edit/test loops, and the provider interface
+  (Phase 1) for the planner. Phase 4 builds the LLM-driven
+  plan/edit/test/debug worker on top — the first phase where a live model
+  is part of the loop (keep tests hermetic with fake providers).

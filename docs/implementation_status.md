@@ -1,12 +1,12 @@
 # Implementation Status
 
-Last updated: 2026-07-28 (Phase 2 complete)
+Last updated: 2026-07-28 (Phase 3 complete)
 
 | Phase | Scope | Status |
 |-------|-------|--------|
 | 1 | Kernel (task graph, scheduler, event bus, recovery, hard gate) + provider interface (local Ollama) | **DONE — 35/35 tests pass** |
 | 2 | Memory/context system + workspace indexer | **DONE — 33/33 tests pass (68 total)** |
-| 3 | Linux tools + execution engine | Not started |
+| 3 | Linux tools + execution engine | **DONE — 53/53 tests pass (121 total)** |
 | 4 | Coding agent workflow | Not started |
 | 4.5 | Notifier/Command layer, NIM key pool, remaining providers, recovery classification upgrade | Not started |
 | 5 | Browser automation | Not started |
@@ -113,16 +113,38 @@ Last updated: 2026-07-28 (Phase 2 complete)
   window. `Retriever.gather` merges project/decision/workspace sources,
   deduped, capped.
 
+## Phase 3 — what exists and is verified
+
+### tools/base.py + tools/registry.py
+- `Tool` ABC (name/description/typed `ParamSpec` params/**explicit**
+  `hard_gate` bool), `ToolResult` with recovery `failure_class`,
+  `ToolExecutor`: the single call path — validate → gate (hard_gate:true
+  only, via the kernel enforcer; no enforcer = refused) → run → structured
+  result. Nothing raises across the boundary. Runner protocol
+  (`async (command, cwd, timeout_s) -> Completed`) + default
+  `async_subprocess_runner` with process-group kill on timeout.
+- Registry refuses malformed tools at load (missing gate flag/name/desc,
+  duplicates) and renders `catalog()` for the planner.
+
+### The six Phase 3 tools (all `hard_gate: false`)
+- `filesystem` (read/write/append/list/exists/mkdir), `shell` (commands
+  with cwd/timeout), `git` (init/status/log/diff/add/commit/branch),
+  `python_exec` (code or script, subprocess-isolated),
+  `package_manager` (distro-adaptive apt/dnf/pacman/flatpak/snap,
+  dry-run support), `docker` (ps/images/pull/run/stop/logs/remove,
+  daemon-down → environment failure).
+
 ## Test status
 
-`python3 -m unittest discover -s tests -t . -v` → **68 tests, OK**
+`python3 -m unittest discover -s tests -t . -v` → **121 tests, OK**
 (also clean under `-W error::ResourceWarning`).
 
 Suite map: `tests/` — task_graph (9), event_bus (8), hard_gate (6),
 recovery (6), provider (5), scheduler_resume acceptance (1),
 vector_store (6), workspace_indexer (6), compression (8), working_memory (5),
-long_task bounded-context acceptance (1), plus embedded Phase 1/2
-integration coverage.
+long_task bounded-context acceptance (1), tools_registry (16),
+tools_exec (15), package_managers (14), docker (6),
+phase3_acceptance (1).
 
 ## Acceptance criteria (spec §10, Phase 1)
 
@@ -132,5 +154,6 @@ integration coverage.
 | **P1**: Event survives a bus restart | `tests/test_event_bus.py::test_event_survives_bus_restart_unacked` |
 | **P2**: Long task forces compression; active context stays bounded | `tests/test_memory_integration.py` (40-turn task, 400-token window, 3+ compressions, all post-compression ratios < threshold) |
 | **P2**: Indexer updates only the changed file's subgraph | `tests/test_workspace_indexer.py::test_acceptance_only_changed_files_subgraph_updates` |
+| **P3**: Install package, run script, report result, 2+ distros | `tests/test_phase3_acceptance.py` (apt + dnf code paths with verbatim command assertions, real script execution + git commit, all through the Scheduler) |
 
-All pass. Phase 3 is unblocked.
+All pass. Phase 4 is unblocked.

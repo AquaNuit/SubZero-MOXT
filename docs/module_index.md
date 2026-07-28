@@ -41,6 +41,20 @@ only, awaiting its phase).
 | `memory/working_memory.py` | built | Minimal context assembly, `TokenCounter` protocol, `ContextPressureMonitor` (70% threshold) |
 | `memory/retrieval.py` | built | `Retriever.gather` merging project/decision/workspace sources |
 
+## tools/ — tool framework (service)
+
+| File | Status | Purpose |
+|------|--------|---------|
+| `tools/base.py` | built | `Tool` ABC, `ParamSpec` typing, `ToolResult` (+`failure_class`), `ToolExecutor` (validate→gate→run), runner protocol + `async_subprocess_runner` |
+| `tools/registry.py` | built | Registration-time interface enforcement; planner `catalog()` |
+| `tools/shell.py` | built | Shell commands (cwd, timeout w/ process-group kill) |
+| `tools/filesystem.py` | built | read/write/append/list/exists/mkdir |
+| `tools/git.py` | built | init/status/log/diff/add/commit/branch; optional commit-author override |
+| `tools/python_exec.py` | built | Python code/script in a subprocess |
+| `tools/package_managers.py` | built | Distro detection (apt/dnf/pacman/flatpak/snap), command adaptation, dry-run |
+| `tools/docker.py` | built | Container management; daemon-down → environment failure |
+| `tools/re_static/`, `tools/security_active/` | placeholder | Phase 5.5 (Ghidra bridge, hard_gate:false) / active tooling (hard_gate:true only) |
+
 ## tests/
 
 | File | Status | Purpose |
@@ -56,13 +70,18 @@ only, awaiting its phase).
 | `tests/test_compression.py` | built | Structured extraction, JSON roundtrip, compact parent summary, transcript store, mid-task compress, LLM path + fallbacks (8 tests) |
 | `tests/test_working_memory.py` | built | Assembly minimality, 70% threshold firing, bounded after compression, retriever 3-source merge (5 tests) |
 | `tests/test_memory_integration.py` | built | **Phase 2 acceptance**: 40-turn scheduler task forces 3+ compressions, context bounded after each, structured summaries, externalized transcript (1 test) |
+| `tests/test_tools_registry.py` | built | Registration refusals, param coercion, executor flows incl. gated tool through the real enforcer (16 tests) |
+| `tests/test_tools_exec.py` | built | Real hermetic shell/fs/git/python_exec runs incl. timeouts + injected runners (15 tests) |
+| `tests/test_package_managers.py` | built | Distro detection (5 managers + fallbacks), command adaptation, dry-run, real dpkg path (14 tests) |
+| `tests/test_docker.py` | built | Command construction, daemon-down environment failure (6 tests) |
+| `tests/test_phase3_acceptance.py` | built | **Phase 3 acceptance**: install (apt+dnf paths), run script, git commit, report — via Scheduler (1 test) |
 
 ## Placeholder packages (created per spec §9, filled in later phases)
 
 | Directory | Phase | Will contain |
 |-----------|-------|--------------|
 | ~~`memory/`~~ | ~~2~~ | **BUILT in Phase 2** — see table above |
-| `tools/` | 3–6 | `registry.py`, `filesystem.py`, `shell.py`, `git.py`, `docker.py`, `browser.py`, `package_managers.py`, `re_static/ghidra_bridge.py`, `security_active/` (hard_gate:true only) |
+| ~~`tools/`~~ | ~~3~~ | **BUILT in Phase 3** (except `browser.py` — Phase 5, `re_static/` + `security_active/` — Phase 5.5) — see table above |
 | `notify/` | 4.5 | `telegram_bot.py`, `discord_bot.py`, `command_worker.py` |
 | `permission/` | 4.5 | `modes.py`, `hard_gates.py` (modes cannot bypass the kernel enforcer) |
 | `plugins/` | 6.5 | `sdk.py` (manifest schema, loader), `loaded_plugins/` drop-in dir |
