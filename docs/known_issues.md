@@ -5,6 +5,18 @@ when it gets fixed.
 
 ## Open
 
+0.i **The coding agent has only run against scripted providers.** All
+   plumbing is real (indexer, edits, test runs, scheduler) but prompt
+   quality for a REAL small local model (qwen2.5-coder:7b) is unverified —
+   expect plan-parse retries to be frequent at first. *Fix: smoke-run on
+   AT's laptop against Ollama; tune Planner.SYSTEM_PROMPT; consider
+   grammar/JSON-mode decoding (Ollama `format: json`) in Phase 4.5.*
+
+0.ii **Edit granularity is whole-block find/replace.** Large files /
+   repeated blocks force `find`-disambiguation replans (burns iterations).
+   Acceptable for the Phase 4 loop; *fix: line-anchored or AST-scoped
+   edits if real-world usage shows iteration waste.*
+
 0.a **No audit log of tool calls yet** (spec §8). The executor is the
    single call path, so this is one hook away; it lands with the
    permission-modes layer. *Fix: Phase 4.5.*

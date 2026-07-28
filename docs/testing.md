@@ -7,7 +7,7 @@
 python3 -m unittest discover -s tests -t . -v
 ```
 
-Current status: **121 tests, all passing** (also clean under
+Current status: **132 tests, all passing** (also clean under
 `-W error::ResourceWarning`).
 
 ## Suite map
@@ -29,6 +29,8 @@ Current status: **121 tests, all passing** (also clean under
 | `tests/test_package_managers.py` (14) | os-release parsing, ID/ID_LIKE/flatpak/snap/unknown detection, all 5 managers' commands, quoting, errors, install flows (apt+dnf), dry-run executes nothing, failure classes, **real `dpkg -s bash` on this machine** |
 | `tests/test_docker.py` (6) | Daemon-unavailable→environment, ps/images/run/pull/stop/logs construction, param errors |
 | `tests/test_phase3_acceptance.py` (1) | **Phase 3 acceptance** (see below) |
+| `tests/test_planner.py` (7) | Clean + prose-embedded JSON parse, garbage→retry→success (stricter prompt asserted), persistent garbage→LogicError, missing test_command/edit keys rejected, replan carries failure context + "genuinely different" instruction |
+| `tests/test_coding_agent.py` (4) | **Phase 4 acceptance** (below); debug loop recovers from bad first edit (2 provider calls, 2 test runs); iteration exhaustion → task.failed logic; unparseable plans → task.failed logic |
 | `tests/test_scheduler_resume.py` (1) | **Phase 1 acceptance** (see below) |
 
 ## Acceptance-test mapping (spec §10)
@@ -42,6 +44,8 @@ Current status: **121 tests, all passing** (also clean under
 | Indexer updates only the changed file's subgraph | `test_workspace_indexer.py::test_acceptance_only_changed_files_subgraph_updates`: modifies one file, asserts only its chunks re-embedded, other files' `embedded_at` + chunk refs untouched |
 | **Phase 3 criterion** | Test |
 | Install a package, run a script, report result, on 2+ distros | `test_phase3_acceptance.py`: scheduler-driven worker installs `htop` through the **apt and dnf production code paths** (real os-release strings, verbatim adapted commands asserted), writes + really executes a diagnostic script, commits it to a real git repo, reports via the event bus. Sandbox has one distro/no root — multi-distro coverage is at the code-path level, documented in the test |
+| **Phase 4 criterion** | Test |
+| Fix a seeded bug end-to-end unattended, indexer-first (no full-repo scan) | `test_coding_agent.py::test_seeded_bug_fixed_end_to_end_indexer_first`: real failing repo in tmp; scripted provider; asserts task done + fix verified by real test rerun OUTSIDE the agent; trace proves `indexer.scan`/`where_is` BEFORE first provider call; first prompt contains indexer location `ops.py:8`; filesystem reads touch ONLY the edited file |
 
 ## Rules for future tests
 
@@ -65,3 +69,8 @@ Current status: **121 tests, all passing** (also clean under
    `HashEmbedder` is keyword-based; use 2+ overlapping tokens between
    query and target text, and dimension ≥1024 when overlap is small
    (see `tests/test_working_memory.py`).
+8. **LLM-in-the-loop tests use scripted providers.** Implement the Phase 1
+   `Provider` interface (`complete`/`health`), record `calls` for prompt
+   assertions, play back canned responses (or callables of the messages).
+   Everything AROUND the model — indexer, tools, scheduler, transcripts —
+   runs 100% real (see `tests/test_coding_agent.py`).

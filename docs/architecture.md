@@ -30,6 +30,12 @@ The kernel is deliberately small and changes rarely. Everything else —
 providers, tools, memory strategies, notifiers, plugins — is a **service**
 the kernel dispatches to.
 
+Between the two sits the `agent/` layer (Phase 4): LLM-driven *workers*
+(planner, coding worker) that the scheduler dispatches to. Workers are
+services too — they consume the kernel's public interfaces plus the tool
+executor, indexer, and memory system, and report failures via the kernel's
+marker exceptions. The kernel never imports them.
+
 ## The service boundary
 
 One rule, enforced structurally:

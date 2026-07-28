@@ -55,6 +55,13 @@ only, awaiting its phase).
 | `tools/docker.py` | built | Container management; daemon-down → environment failure |
 | `tools/re_static/`, `tools/security_active/` | placeholder | Phase 5.5 (Ghidra bridge, hard_gate:false) / active tooling (hard_gate:true only) |
 
+## agent/ — LLM-driven workers (service, Phase 4)
+
+| File | Status | Purpose |
+|------|--------|---------|
+| `agent/planner.py` | built | Provider → structured `Plan` (analysis + find/replace edits + test command); defensive parse w/ retry; `replan_with_failure` |
+| `agent/coding_worker.py` | built | Scheduler worker: indexer-first → assemble → plan → bounded edit/test/debug loop → structured close-out |
+
 ## tests/
 
 | File | Status | Purpose |
@@ -75,6 +82,8 @@ only, awaiting its phase).
 | `tests/test_package_managers.py` | built | Distro detection (5 managers + fallbacks), command adaptation, dry-run, real dpkg path (14 tests) |
 | `tests/test_docker.py` | built | Command construction, daemon-down environment failure (6 tests) |
 | `tests/test_phase3_acceptance.py` | built | **Phase 3 acceptance**: install (apt+dnf paths), run script, git commit, report — via Scheduler (1 test) |
+| `tests/test_planner.py` | built | Plan parsing: clean/prose-embedded JSON, retry-then-success, persistent garbage → LogicError, missing test_command/keys, failure-context replan (7 tests) |
+| `tests/test_coding_agent.py` | built | **Phase 4 acceptance** (seeded bug fixed E2E, indexer-first ordering + no-repo-scan read set) + debug-loop recovery, iteration exhaustion, unparseable plans (4 tests) |
 
 ## Placeholder packages (created per spec §9, filled in later phases)
 

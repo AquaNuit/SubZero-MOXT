@@ -1,13 +1,13 @@
 # Implementation Status
 
-Last updated: 2026-07-28 (Phase 3 complete)
+Last updated: 2026-07-28 (Phase 4 complete)
 
 | Phase | Scope | Status |
 |-------|-------|--------|
 | 1 | Kernel (task graph, scheduler, event bus, recovery, hard gate) + provider interface (local Ollama) | **DONE — 35/35 tests pass** |
 | 2 | Memory/context system + workspace indexer | **DONE — 33/33 tests pass (68 total)** |
 | 3 | Linux tools + execution engine | **DONE — 53/53 tests pass (121 total)** |
-| 4 | Coding agent workflow | Not started |
+| 4 | Coding agent workflow (plan/edit/test/debug loop) | **DONE — 11/11 tests pass (132 total)** |
 | 4.5 | Notifier/Command layer, NIM key pool, remaining providers, recovery classification upgrade | Not started |
 | 5 | Browser automation | Not started |
 | 5.5 | Static RE tooling (Ghidra bridge) | Not started |
@@ -134,9 +134,29 @@ Last updated: 2026-07-28 (Phase 3 complete)
   dry-run support), `docker` (ps/images/pull/run/stop/logs/remove,
   daemon-down → environment failure).
 
+## Phase 4 — what exists and is verified
+
+### agent/planner.py
+- `Planner` over the Phase 1 Provider interface: strict-JSON system
+  prompt, defensive parse (JSON-in-prose extraction, per-edit validation,
+  test_command required), one stricter retry, then `LogicError`.
+- `replan_with_failure` feeds the failure output back and demands a
+  genuinely different fix (spec §2.3 logic-failure semantics).
+
+### agent/coding_worker.py
+- `CodingWorker` — the Scheduler `worker` for coding tasks:
+  indexer-first (`scan` + `where_is` on goal identifiers BEFORE any
+  provider call; locations injected into the prompt) → WorkingMemory
+  assembly → plan → bounded edit/test/debug loop (exact find/replace via
+  ToolExecutor filesystem; shell test runs; failure-context replans;
+  `LogicError` on exhaustion) → spec §5 close-out (re-index, structured
+  compression, externalized transcript, decision recorded).
+- Every tool call goes through the ToolExecutor; optional `trace` hook
+  makes ordering/no-repo-scan properties testable.
+
 ## Test status
 
-`python3 -m unittest discover -s tests -t . -v` → **121 tests, OK**
+`python3 -m unittest discover -s tests -t . -v` → **132 tests, OK**
 (also clean under `-W error::ResourceWarning`).
 
 Suite map: `tests/` — task_graph (9), event_bus (8), hard_gate (6),
@@ -144,7 +164,7 @@ recovery (6), provider (5), scheduler_resume acceptance (1),
 vector_store (6), workspace_indexer (6), compression (8), working_memory (5),
 long_task bounded-context acceptance (1), tools_registry (16),
 tools_exec (15), package_managers (14), docker (6),
-phase3_acceptance (1).
+phase3_acceptance (1), planner (7), coding_agent acceptance (4).
 
 ## Acceptance criteria (spec §10, Phase 1)
 
@@ -155,5 +175,6 @@ phase3_acceptance (1).
 | **P2**: Long task forces compression; active context stays bounded | `tests/test_memory_integration.py` (40-turn task, 400-token window, 3+ compressions, all post-compression ratios < threshold) |
 | **P2**: Indexer updates only the changed file's subgraph | `tests/test_workspace_indexer.py::test_acceptance_only_changed_files_subgraph_updates` |
 | **P3**: Install package, run script, report result, 2+ distros | `tests/test_phase3_acceptance.py` (apt + dnf code paths with verbatim command assertions, real script execution + git commit, all through the Scheduler) |
+| **P4**: Fix a seeded bug end-to-end unattended, indexer-first | `tests/test_coding_agent.py` (real failing repo fixed via scheduler; `indexer.scan`/`where_is` before first provider call; `ops.py:8` location in first prompt; ONLY the edited file read — no repo scan; fix verified by real test rerun outside the agent) |
 
-All pass. Phase 4 is unblocked.
+All pass. Phase 4.5 is unblocked.

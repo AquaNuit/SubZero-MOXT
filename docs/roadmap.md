@@ -8,7 +8,7 @@ phase's acceptance test must pass before the next phase starts.
 | 1 | Kernel: task graph + scheduler + event bus (versioned, durable) + provider interface (local Ollama only) | Kill/restart mid-task → resume with no re-prompt; event survives a bus restart | **DONE (35/35 tests)** |
 | 2 | Memory/context system + workspace indexer | Run a task long enough to force a compression pass; active context stays bounded; indexer updates only the changed file's subgraph | **DONE (68/68 tests)** |
 | 3 | Linux tools + execution engine | Agent installs a package, runs a script, reports result, on 2+ distros | **DONE (121/121 tests)** |
-| 4 | Coding agent workflow (plan/edit/test/debug loop) | Agent fixes a seeded bug in a small repo end-to-end unattended, using the workspace indexer instead of a fresh full-repo scan | Not started |
+| 4 | Coding agent workflow (plan/edit/test/debug loop) | Agent fixes a seeded bug in a small repo end-to-end unattended, using the workspace indexer instead of a fresh full-repo scan | **DONE (132/132 tests)** |
 | 4.5 | Notifier/Command layer + NIM key pool + remaining providers + Recovery Manager failure classification | Pull the network cable on the main NIM key mid-task → pool fails over; approve/deny a `needs_human` from Telegram; force transient vs logic failure → different recovery paths | Not started |
 | 5 | Browser automation | Agent completes a multi-step web task (navigate, fill form, screenshot) unattended | Not started |
 | 5.5 | Static RE tooling (Ghidra bridge), hard-gate config | A `hard_gate: true` stub tool cannot execute without an approval event, by test (enforcer already exists — this wires it to tools) | Not started |
@@ -29,9 +29,9 @@ phase's acceptance test must pass before the next phase starts.
 - **`config/routing.yaml` is written** (spec §4) but unread until the
   router lands in Phase 4.5 — keeping the table as config from day one
   avoids hardcoded routing creeping into Phase 2–4 code.
-- **Phase 4 next** (coding agent workflow). All prerequisites now exist:
-  the workspace indexer (Phase 2) for indexer-first navigation, the tool
-  executor (Phase 3) for edit/test loops, and the provider interface
-  (Phase 1) for the planner. Phase 4 builds the LLM-driven
-  plan/edit/test/debug worker on top — the first phase where a live model
-  is part of the loop (keep tests hermetic with fake providers).
+- **Phase 4.5 next** (notifier/command layer + NIM key pool + remaining
+  providers + recovery classification upgrade). This phase needs network
+  secrets (Telegram/Discord tokens, NIM keys) on AT's laptop — the sandbox
+  build keeps bots behind injectable clients (long-polling loop + command
+  handlers testable hermetically) and provider HTTP behind injected
+  transports, same discipline as Phases 1–4.

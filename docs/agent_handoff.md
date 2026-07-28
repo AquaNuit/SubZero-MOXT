@@ -6,6 +6,113 @@ factual; if it and the code disagree, the code is right (fix this file).
 
 ---
 
+## Session 2026-07-28 (night) — Phase 4 complete
+
+### Current implementation status
+
+**Phase 4 of 7 DONE and acceptance-tested** (132/132 stdlib-unittest tests
+pass: 121 from Phases 1–3 + 11 new, ~5.4s). Phase 4.5 is next — see "Next
+recommended task".
+
+### Modules completed this session
+
+- `agent/planner.py` — `Planner` over the Phase 1 Provider interface:
+  strict-JSON system prompt, defensive parse (JSON-in-prose extraction,
+  per-edit path/find/replace validation, required test_command), one
+  stricter retry, then `LogicError`; `replan_with_failure` carries the
+  failure output + demands a genuinely different fix.
+- `agent/coding_worker.py` — `CodingWorker` (Scheduler-compatible
+  `worker(task, ctx)`): indexer-first (`scan` + `where_is` on goal
+  identifiers BEFORE any provider call; locations → prompt) →
+  WorkingMemory assemble → plan → bounded edit/test/debug loop (exact
+  find/replace via ToolExecutor; shell test runs; failure-context replan;
+  `LogicError` on exhaustion) → close-out (post-edit re-index, structured
+  compression, externalized transcript, decision recorded). `trace` hook
+  for ordering assertions.
+- Tests: `test_planner.py` (7), `test_coding_agent.py` (4) — incl. the
+  acceptance: real seeded-bug repo fixed E2E; indexer-first proven by
+  trace order + `ops.py:8` in first prompt + read-set == {ops.py}; fix
+  verified by real unittest rerun OUTSIDE the agent.
+- Docs: status/roadmap/changelog/module_index/testing/known_issues/
+  architecture/README updated.
+
+### Architecture decisions made (and why)
+
+1. **New top-level `agent/` package** for LLM-driven workers — sits
+   between kernel and services; kernel never imports it (§9 tree extended,
+   documented in module_index + architecture).
+2. **Edits are exact find/replace, must match exactly once** — small local
+   models produce them far more reliably than unified diffs, and a
+   mismatch is clean replan input instead of a corrupt file. Ambiguous
+   `find` (2+ matches) bounces back to the planner.
+3. **Iteration exhaustion / unparseable plans raise `LogicError`** →
+   Recovery marks task failed with failure_class=logic (Phase 1 policy).
+   Phase 4.5 turns this into capped replans + needs_human escalation —
+   the worker already provides the replan machinery Recovery will call.
+4. **Scripted-provider testing pattern** (testing.md rule 8): the model is
+   playback; EVERYTHING else runs real — indexer, filesystem, shell test
+   runs, scheduler, transcripts, decision memory. This is how LLM-in-the-
+   loop phases stay hermetic in the no-network sandbox.
+5. **`trace` hook on workers** — ordering/read-set properties
+   ("indexer before provider", "no repo scan") are asserted on an
+   explicit event trace rather than inferred from mocks.
+
+### Known issues / gotchas for next session
+
+- New entries 0.i (only scripted-provider runs so far — real-model prompt
+  quality unverified; expect parse retries; consider Ollama
+  `format: json`) and 0.ii (whole-block edit granularity). Full list in
+  known_issues.md.
+- **Phase 4.5 needs network secrets on AT's laptop** (Telegram/Discord
+  tokens, NIM API keys) — keep the sandbox build hermetic: bots behind
+  injectable API clients (long-poll loop + command handlers fully
+  testable), provider HTTP behind injected transports (pattern:
+  `LocalOllamaProvider(http_fn=...)`).
+- Phase 4.5 also upgrades Recovery: logic → capped replan (call
+  `Planner.replan_with_failure` via the worker), environment/exhausted →
+  needs_human escalation through the new notifier. Circuit breakers per
+  tool/provider + `budget.warning` events (event schema already reserved).
+- OpenRouter free tier: router must honor `free_tier_reserved_for:
+  critical` from config/routing.yaml (adds PyYAML dep — justify in
+  changelog, or write a mini YAML subset parser… PyYAML is fine).
+
+### Performance observations
+
+- 132 tests in ~5.4s. Coding-agent tests spawn real subprocesses
+  (unittest runs) — still fast. No new steady-state footprint; VRAM
+  untouched (first real VRAM use comes when Ollama runs on the laptop).
+
+### Next recommended task
+
+**Phase 4.5: Notifier/Command layer + NIM key pool + remaining providers
++ Recovery classification upgrade** (spec §3, §4, §2.3).
+
+Suggested order:
+1. `providers/router.py` + PyYAML — routing table reader, task classifier
+   (heuristic first), health-based reweighting tables in the kernel DB,
+   verifier/critic pass for hard/critical, quorum=2.
+2. `providers/nim.py` + `ProviderKeyPool` (round-robin, 40rpm/key window,
+   429 per-key backoff); `providers/openrouter.py`,
+   `providers/opencode_zen.py` — all with injected transports.
+3. `notify/command_worker.py` — approval queue → enforcer.approve/deny;
+   then `notify/telegram_bot.py` + `notify/discord_bot.py` as thin bus
+   consumers + command writers behind injectable API clients.
+4. `kernel/recovery.py` upgrade — logic → capped replan (wire to worker),
+   environment/exhausted → needs_human escalation (emit event; set task
+   needs_human); per-tool/provider circuit breakers emitting
+   `budget.warning`/`circuit.open`.
+5. `permission/modes.py` + audit log table (spec §8) on the executor.
+
+Acceptance (spec §10): pull the network cable on the main NIM key
+mid-task → pool fails over (simulate with injected transports: key A
+starts failing 429/conn, assert key B takes over and task completes);
+approve/deny a needs_human from the (fake) Telegram client end-to-end;
+force transient vs logic failure → assert different recovery paths
+(retry vs replan/nees_human). **Do not start Phase 5 in the same session
+unless Phase 4.5's acceptance passes.**
+
+---
+
 ## Session 2026-07-28 (late) — Phase 3 complete
 
 ### Current implementation status

@@ -3,6 +3,41 @@
 Format: one entry per working session/phase, newest first. Notable
 decisions belong in `agent_handoff.md` too.
 
+## [Phase 4] — 2026-07-28
+
+Coding agent workflow (plan/edit/test/debug loop). Still zero runtime
+dependencies; 11 new tests (132 total), all passing.
+
+### Added
+- `agent/planner.py` — `Planner` over the Phase 1 Provider interface:
+  strict-JSON system prompt, defensive parsing (JSON-in-prose extraction,
+  per-edit validation, required `test_command`), one stricter retry then
+  `LogicError`; `replan_with_failure` (failure context + demand for a
+  genuinely different fix, spec §2.3).
+- `agent/coding_worker.py` — `CodingWorker`, the Scheduler worker for
+  coding tasks: indexer-first navigation (`scan` + `where_is` BEFORE any
+  provider call; locations in the prompt), WorkingMemory assembly,
+  bounded edit/test/debug loop (exact find/replace through the
+  ToolExecutor, shell test runs, failure-context replans, `LogicError`
+  on exhaustion), and spec §5 close-out (re-index, structured
+  compression, externalized transcript, decision recorded). Optional
+  `trace` hook for ordering assertions.
+- Tests: `test_planner.py` (7) and `test_coding_agent.py` (4) incl. the
+  spec §10 acceptance: real seeded-bug repo fixed end-to-end through the
+  Scheduler with a scripted provider — indexer-first proven by trace
+  ordering + prompt content + read-set (only the edited file was read),
+  fix verified by a real test rerun outside the agent.
+
+### Decisions
+- Edits are exact find/replace pairs (must match exactly once) — simpler
+  than diffs for small models, and mismatches bounce back as clean
+  replan input instead of corrupt files.
+- Debug loop raises `LogicError` on iteration exhaustion → kernel Recovery
+  classifies as logic failure (terminal in Phase 1 policy; becomes a
+  capped replan + needs_human escalation in Phase 4.5).
+- New top-level `agent/` package (LLM-driven workers live here, between
+  kernel and services) — §9 tree extended; documented in module_index.
+
 ## [Phase 3] — 2026-07-28
 
 Linux tools + execution engine. Still zero runtime dependencies; 53 new

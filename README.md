@@ -70,6 +70,7 @@ repository **is** that tree: the GitHub repo root contains `kernel/`,
 ```
 kernel/        Trusted core: task graph, event bus, recovery, scheduler,
                hard-gate enforcer, shared SQLite helper
+agent/         LLM-driven workers (planner, coding worker) — Phase 4
 providers/     LLM provider interface + registry; LocalOllamaProvider
 config/        routing.yaml — provider routing table (read by the Phase 4.5 router)
 tools/         Tool packages (empty placeholders until Phase 3)
@@ -88,7 +89,7 @@ Requirements: **Python 3.11+**. Nothing else — Phase 1 has zero runtime
 dependencies (stdlib only).
 
 ```bash
-# Run the full test suite (121 tests)
+# Run the full test suite (132 tests)
 python3 -m unittest discover -s tests -t . -v
 ```
 
@@ -109,7 +110,7 @@ budget). No test requires a live Ollama daemon.
 | 1 | Kernel + provider interface | **Done** — 35/35 tests pass |
 | 2 | Memory / context + workspace indexer | **Done** — 33/33 tests pass (68 total) |
 | 3 | Linux tools + execution engine | **Done** — 53/53 tests pass (121 total) |
-| 4 | Coding agent workflow | Planned |
+| 4 | Coding agent workflow (plan/edit/test/debug) | **Done** — 11/11 tests pass (132 total) |
 | 4.5 | Notifier/Command layer, NIM key pool, remaining providers, recovery upgrade | Planned |
 | 5 | Browser automation | Planned |
 | 5.5 | Ghidra bridge (static RE) | Planned |
