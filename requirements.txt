@@ -1,0 +1,9 @@
+# Phase 1: zero runtime dependencies (Python 3.11+ stdlib only).
+# Tests run with stdlib unittest: python3 -m unittest discover -s tests -t . -v
+#
+# Planned (added per phase, keep the footprint minimal — 16GB RAM target):
+#   Phase 3:   (none — shell/fs/git tools stay stdlib)
+#   Phase 4.5: python-telegram-bot, discord.py, PyYAML
+#   Phase 5:   playwright
+#   Phase 5.5: (Ghidra bridge talks to a local Ghidra headless install, no pip dep)
+#   Phase 2:   sqlite-vec (or chromadb local), tree-sitter

@@ -1,0 +1,38 @@
+# Routing table (spec §4). Config, not code — the Phase 4.5 router reads
+# this; nothing is hardcoded in Python.
+#
+# - providers: ordered candidates for the task class (first healthy wins,
+#   subject to dynamic health-based reweighting).
+# - verify: run an independent verifier/critic pass before accepting output.
+# - quorum: N independent calls must agree before a result is accepted
+#   (tie-break with an extra call).
+#
+# Task classes are assigned by the Task Classifier (small local model or
+# heuristic to start): trivial | moderate | hard | critical.
+
+routing:
+  trivial:
+    providers: [local_ollama]
+    verify: false
+  moderate:
+    providers: [local_ollama, nim_pool]
+    verify: false
+  hard:
+    providers: [nim_pool, openrouter, opencode_zen]
+    verify: true
+  critical:
+    providers: [nim_pool, openrouter]
+    verify: true
+    quorum: 2
+
+fallback_order: [nim_pool, opencode_zen, openrouter, local_ollama]
+
+# NIM key pool: round-robin across keys we legitimately hold, rolling
+# per-key window against the 40rpm limit, per-key backoff on 429.
+nim_key_pool:
+  requests_per_minute_per_key: 40
+  backoff_on_429_s: 30
+
+# OpenRouter free tier (~5 calls/day): reserved for critical tasks only.
+openrouter:
+  free_tier_reserved_for: critical
