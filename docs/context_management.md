@@ -1,69 +1,70 @@
 # Context Management
 
-**Status: Planned (Phase 2).** This is the design the Phase 2 build must
-implement; nothing here exists yet except the task-graph fields that
-support it (`result_summary`, `full_log_ref`).
+**Status: BUILT (Phase 2, 2026-07-28).** Context is a scarce resource; the
+system manages it explicitly instead of hoping the model copes.
 
-## The problem
-
-A long-running agent that stuffs every transcript into the next prompt will
-blow the context window (and the latency budget) within a few subtasks.
-Context is a scarce resource; the system manages it explicitly instead of
-hoping the model copes.
-
-## Rules
+## The rules, as implemented
 
 ### 1. Working memory is minimal by default
 
-Only three things ride along in an LLM call's context:
+`memory/working_memory.py::WorkingMemory.assemble` builds exactly:
 
-1. the current subtask's goal,
-2. its immediate parent's `result_summary`,
-3. whatever the retrieval step pulls in (see `memory_system.md`).
+1. the current subtask's goal (system message),
+2. its immediate parent's `result_summary` (when present),
+3. retrieved chunks from `Retriever.gather` (when a query is given).
 
-Nothing else. No full sibling transcripts, no whole-repo dumps, no "just in
-case" history.
+Nothing else rides along. No sibling transcripts, no repo dumps.
 
 ### 2. Compression on subtask close
 
-When a subtask completes, its full transcript is compressed to **structured
-JSON, not prose**:
+`memory/compression.py`:
 
-```json
-{
-  "result": "...",
-  "decisions": ["chose apt over snap because target is headless"],
-  "files_touched": ["src/main.py"],
-  "open_questions": ["does the CI box have docker?"]
-}
-```
+- `CompressedSummary` — the structured shape: `result`, `decisions[]`,
+  `files_touched[]`, `open_questions[]` (JSON, not prose — downstream
+  retrieval filters on fields). `as_result_summary()` caps the result
+  portion first so the structured fields always survive truncation.
+- `TranscriptStore` — full transcripts go to
+  `state/transcripts/<task_id>.jsonl`; the returned ref goes into the task
+  row's `full_log_ref`. Never loaded into context by default.
+- Two summarizers behind one protocol: `HeuristicSummarizer`
+  (deterministic, stdlib, the default) and `LLMSummarizer` (provider-backed
+  JSON extraction with a **hard fallback to heuristic on any failure** —
+  compression must never kill a running task).
 
-- The **full transcript** goes to an external log store keyed by `task_id`;
-  the task row's `full_log_ref` points at it. It is never loaded into
-  context by default — only an explicit debugging/retrieval step reads it.
-- The **structured summary** is stored as the task's `result_summary` input
-  to the parent's context. Downstream retrieval filters on fields
-  (e.g. "prior tasks that touched `src/main.py`"), which prose summaries
-  can't support.
+### 3. Context-pressure detection (built, acceptance-tested)
 
-### 3. Context-pressure detection
+`ContextPressureMonitor(window_tokens, threshold=0.70, keep_last_n)`:
 
-Track the active token count per running agent. At a configurable threshold
-(start at **70%** of the model's window), trigger a **mid-task compression
-pass**: summarize everything except the last N turns, keep the current goal
-verbatim, continue. Do this *before* a call fails with an over-length error
-— waiting for the API to reject the request wastes a full round-trip and
-risks losing the thread of the task.
+- `check(messages) -> PressureReport(used, window, ratio, should_compress)`
+- `compress_if_needed(messages, summarizer)` — when usage ≥ threshold,
+  `mid_task_compress` summarizes everything but the last N turns
+  (goal message kept verbatim, middle swapped for one summary system
+  message), returning the bounded list + the structured summary.
+
+Token counting is behind `TokenCounter` (default `HeuristicTokenCounter`:
+chars/4 + per-message overhead) — a model tokenizer drops in later.
+
+This fires **before** a provider rejects an over-length request: no wasted
+round-trip, no lost thread.
 
 ### 4. Retrieval before generation
 
-Before each LLM call, pull top-k relevant chunks (see `memory_system.md`).
-The workspace indexer answers "where is X defined" deterministically, so
-that question never spends tokens at all.
+`Retriever.gather(query, k)` runs before each LLM call; the indexer's
+`where_is`/`dependents_of` answer structural questions with zero tokens.
 
-## Phase 2 acceptance test (spec §10)
+## Known limits (tracked in known_issues.md)
 
-Run a task long enough to force a compression pass; confirm the active
-context stays bounded (token count never crosses the threshold without a
-compression trigger firing) and the compressed output is the structured
-shape above.
+- `HeuristicTokenCounter` is an estimate; compression may fire early/late
+  vs. a real tokenizer. Acceptable: the failure mode it prevents (hard
+  over-length rejection) is worse than a premature summary.
+- `LLMSummarizer` is synchronous (`asyncio.run` inside); called from an
+  async worker it falls back to heuristic. An async summarize path is a
+  Phase 4 item when the real planner worker lands.
+
+## Acceptance test (spec §10, Phase 2) — passes
+
+`tests/test_memory_integration.py` runs a 40-turn task through the Phase 1
+scheduler in a 400-token window: 3+ compression passes fired, post-
+compression usage stayed below threshold every time, summaries structured,
+transcript externalized with `full_log_ref` set and `Files:` in the
+parent-visible `result_summary`.

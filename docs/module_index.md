@@ -30,6 +30,17 @@ only, awaiting its phase).
 |------|--------|---------|
 | `config/routing.yaml` | built (consumer is Phase 4.5) | Routing table: `trivial/moderate/hard/critical` → providers + `verify`/`quorum`; `fallback_order`; NIM key-pool and OpenRouter free-tier policy |
 
+## memory/ — memory & context system (service)
+
+| File | Status | Purpose |
+|------|--------|---------|
+| `memory/vector_store.py` | built | `Embedder` protocol, `HashEmbedder` (2-probe signed hashing), `VectorStore` namespaced cosine search in SQLite |
+| `memory/workspace_indexer.py` | built | File index + symbol graph (ast for Python, regex for 8 languages) + dependency graph; incremental `scan()`; `where_is`/`dependents_of`/`search_code` |
+| `memory/long_term.py` | built | `DecisionMemory` (embedded "tried X, outcome Y") + `ProjectMemory` (facts with provenance) |
+| `memory/compression.py` | built | `CompressedSummary` structured shape, `HeuristicSummarizer`/`LLMSummarizer` (fallback), `TranscriptStore`, `mid_task_compress` |
+| `memory/working_memory.py` | built | Minimal context assembly, `TokenCounter` protocol, `ContextPressureMonitor` (70% threshold) |
+| `memory/retrieval.py` | built | `Retriever.gather` merging project/decision/workspace sources |
+
 ## tests/
 
 | File | Status | Purpose |
@@ -40,12 +51,17 @@ only, awaiting its phase).
 | `tests/test_recovery.py` | built | Classification, retry caps/terminal, scheduler failure paths, dependent blocking, loop survival (6 tests) |
 | `tests/test_scheduler_resume.py` + `tests/_resume_runner.py` | built | **Phase 1 acceptance**: `kill -9` mid-task → restart → resume with no re-prompt, idempotent steps, durable events (1 test) |
 | `tests/test_provider.py` | built | Ollama mapping, health, error taxonomy, registry (5 tests) |
+| `tests/test_vector_store.py` | built | Embedder determinism/normalization/ordering, namespacing, overwrite, prefix delete, persistence (6 tests) |
+| `tests/test_workspace_indexer.py` | built | **Phase 2 acceptance** (changed-file-only subgraph) + ast symbols, dependency graph, incremental/no-op/remove scans, regex languages (6 tests) |
+| `tests/test_compression.py` | built | Structured extraction, JSON roundtrip, compact parent summary, transcript store, mid-task compress, LLM path + fallbacks (8 tests) |
+| `tests/test_working_memory.py` | built | Assembly minimality, 70% threshold firing, bounded after compression, retriever 3-source merge (5 tests) |
+| `tests/test_memory_integration.py` | built | **Phase 2 acceptance**: 40-turn scheduler task forces 3+ compressions, context bounded after each, structured summaries, externalized transcript (1 test) |
 
 ## Placeholder packages (created per spec §9, filled in later phases)
 
 | Directory | Phase | Will contain |
 |-----------|-------|--------------|
-| `memory/` | 2 | working memory, long-term, compression, retrieval, vector store, workspace indexer |
+| ~~`memory/`~~ | ~~2~~ | **BUILT in Phase 2** — see table above |
 | `tools/` | 3–6 | `registry.py`, `filesystem.py`, `shell.py`, `git.py`, `docker.py`, `browser.py`, `package_managers.py`, `re_static/ghidra_bridge.py`, `security_active/` (hard_gate:true only) |
 | `notify/` | 4.5 | `telegram_bot.py`, `discord_bot.py`, `command_worker.py` |
 | `permission/` | 4.5 | `modes.py`, `hard_gates.py` (modes cannot bypass the kernel enforcer) |

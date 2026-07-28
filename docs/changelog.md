@@ -3,6 +3,45 @@
 Format: one entry per working session/phase, newest first. Notable
 decisions belong in `agent_handoff.md` too.
 
+## [Phase 2] — 2026-07-28
+
+Memory/context system + workspace indexer. Still zero runtime dependencies;
+33 new tests (68 total), all passing.
+
+### Added
+- `memory/vector_store.py` — namespaced embeddings in the kernel SQLite DB
+  (float32 blobs, Python cosine); `Embedder` protocol; `HashEmbedder`
+  (deterministic stdlib embedder, 2-probe signed feature hashing).
+- `memory/workspace_indexer.py` — file index (re-embed on hash change
+  only), Python `ast` symbol graph + regex extractors for 8 languages,
+  import/dependency graph, incremental `scan()` with `ScanReport`,
+  `where_is`/`imports_of`/`dependents_of`/`search_code` queries.
+- `memory/long_term.py` — `DecisionMemory` (rows + embedded) and
+  `ProjectMemory` (facts with provenance).
+- `memory/compression.py` — `CompressedSummary` structured shape,
+  `HeuristicSummarizer`, `LLMSummarizer` (hard fallback to heuristic),
+  `TranscriptStore` (external JSONL transcripts, `full_log_ref` wired),
+  `mid_task_compress`.
+- `memory/working_memory.py` — minimal assembly rule, `TokenCounter`
+  protocol + heuristic counter, `ContextPressureMonitor` (70% threshold).
+- `memory/retrieval.py` — `Retriever.gather` merging project/decision/
+  workspace sources (deduped, capped).
+- Tests: `test_vector_store.py`, `test_workspace_indexer.py` (incl. the
+  changed-file-only-subgraph acceptance), `test_compression.py`,
+  `test_working_memory.py`, `test_memory_integration.py` (the
+  bounded-context acceptance, run through the Phase 1 scheduler).
+
+### Decisions
+- No vector-DB server and no `sqlite-vec` yet: Python cosine over blobs is
+  enough at this scale; `sqlite-vec` is a Phase 7 optimization behind the
+  existing interface if profiling demands it.
+- `HashEmbedder` is the default embedder to keep tests hermetic; the real
+  embedding model (Ollama, <1GB VRAM) plugs into the same protocol later.
+- Python symbols via stdlib `ast`; tree-sitter deferred (it's a new dep —
+  the regex extractors cover other languages until it's justified).
+- `LLMSummarizer` never fails a task: any provider/parse error falls back
+  to the heuristic summarizer.
+
 ## [Phase 1] — 2026-07-28
 
 Initial build. Zero runtime dependencies (Python 3.11+ stdlib only);

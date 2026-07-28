@@ -5,6 +5,28 @@ when it gets fixed.
 
 ## Open
 
+0. **`LLMSummarizer` is synchronous** (`asyncio.run` inside `summarize`).
+   Called from an async worker it hits "event loop already running" and
+   falls back to the heuristic summarizer — safe, but the LLM path is
+   effectively sync-context only. *Fix: Phase 4, add `async_summarize`
+   when the real planner worker lands.*
+
+0.1 **`HashEmbedder` is keyword-grade, not semantic.** Retrieval quality
+   depends on vocabulary overlap; paraphrases won't match. Fine for
+   plumbing tests + small workspaces; *fix: drop in a real embedding model
+   (Ollama `nomic-embed-text` class, <1GB VRAM) behind the existing
+   `Embedder` protocol when the agent runs on AT's laptop.*
+
+0.2 **`HeuristicTokenCounter` (chars/4) is an estimate.** Pressure may fire
+   early/late vs. a real tokenizer. The failure mode it prevents (hard
+   over-length API rejection) is worse than a premature summary. *Fix:
+   plug a real tokenizer behind `TokenCounter` with the Phase 4 router.*
+
+0.3 **Dependency-graph module resolution is heuristic** (dotted path +
+   stem matching; no aliasing/`from x import y as z` awareness). It's a
+   graph hint — the LLM confirms before editing. *Fix: tree-sitter upgrade
+   when justified (new dep).*
+
 1. **Logic/environment failures terminate instead of escalating.**
    `RecoveryManager` classifies them correctly but marks the task `failed`
    (Phase 1 policy). Replan-on-logic needs the Phase 4 planner;
@@ -29,8 +51,9 @@ when it gets fixed.
 
 5. **No planner/LLM worker yet.**
    The scheduler dispatches a `worker` callable, but the LLM-driven
-   plan/execute worker is Phase 4. The provider interface and routing
-   config are ready for it. *Fix: Phase 4.*
+   plan/execute worker is Phase 4. The provider interface, routing config,
+   and (as of Phase 2) the memory system it will consume are ready.
+   *Fix: Phase 4.*
 
 6. **`config/routing.yaml` is unread.**
    Written per spec §4 so routing stays config; nothing parses it until the

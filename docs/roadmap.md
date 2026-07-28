@@ -6,7 +6,7 @@ phase's acceptance test must pass before the next phase starts.
 | Phase | Deliverable | Acceptance test | Status |
 |-------|-------------|-----------------|--------|
 | 1 | Kernel: task graph + scheduler + event bus (versioned, durable) + provider interface (local Ollama only) | Kill/restart mid-task → resume with no re-prompt; event survives a bus restart | **DONE (35/35 tests)** |
-| 2 | Memory/context system + workspace indexer | Run a task long enough to force a compression pass; active context stays bounded; indexer updates only the changed file's subgraph | Not started |
+| 2 | Memory/context system + workspace indexer | Run a task long enough to force a compression pass; active context stays bounded; indexer updates only the changed file's subgraph | **DONE (68/68 tests)** |
 | 3 | Linux tools + execution engine | Agent installs a package, runs a script, reports result, on 2+ distros | Not started |
 | 4 | Coding agent workflow (plan/edit/test/debug loop) | Agent fixes a seeded bug in a small repo end-to-end unattended, using the workspace indexer instead of a fresh full-repo scan | Not started |
 | 4.5 | Notifier/Command layer + NIM key pool + remaining providers + Recovery Manager failure classification | Pull the network cable on the main NIM key mid-task → pool fails over; approve/deny a `needs_human` from Telegram; force transient vs logic failure → different recovery paths | Not started |
@@ -29,6 +29,8 @@ phase's acceptance test must pass before the next phase starts.
 - **`config/routing.yaml` is written** (spec §4) but unread until the
   router lands in Phase 4.5 — keeping the table as config from day one
   avoids hardcoded routing creeping into Phase 2–4 code.
-- **Phase 2 next.** The workspace indexer and compression pass are
-  prerequisites for the Phase 4 coding workflow's acceptance test
-  (indexer-first code navigation), so nothing should jump the queue.
+- **Phase 3 next** (Linux tools + execution engine). Phase 2 delivered the
+  indexer + compression prerequisites for Phase 4's acceptance test. Phase
+  3 introduces the tool registry — the `hard_gate` contract per tool gets
+  enforced at registration time (interface already fixed in
+  `docs/tool_api.md`; enforcer already built and tested).

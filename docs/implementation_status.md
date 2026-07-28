@@ -1,11 +1,11 @@
 # Implementation Status
 
-Last updated: 2026-07-28 (Phase 1 complete)
+Last updated: 2026-07-28 (Phase 2 complete)
 
 | Phase | Scope | Status |
 |-------|-------|--------|
 | 1 | Kernel (task graph, scheduler, event bus, recovery, hard gate) + provider interface (local Ollama) | **DONE — 35/35 tests pass** |
-| 2 | Memory/context system + workspace indexer | Not started |
+| 2 | Memory/context system + workspace indexer | **DONE — 33/33 tests pass (68 total)** |
 | 3 | Linux tools + execution engine | Not started |
 | 4 | Coding agent workflow | Not started |
 | 4.5 | Notifier/Command layer, NIM key pool, remaining providers, recovery classification upgrade | Not started |
@@ -80,19 +80,57 @@ Last updated: 2026-07-28 (Phase 1 complete)
   fallback_order, NIM pool 40rpm policy, OpenRouter free-tier reservation).
 - Consumed by the router in Phase 4.5 — nothing reads it yet.
 
+## Phase 2 — what exists and is verified
+
+### memory/vector_store.py
+- Namespaced embeddings as float32 blobs in the kernel SQLite DB; cosine
+  top-k in Python (no vector-DB server). `Embedder` protocol +
+  `HashEmbedder` (deterministic stdlib, 2-probe signed hashing) so all
+  tests are hermetic; a real embedding model drops in behind the protocol.
+
+### memory/workspace_indexer.py
+- File index (path/language/sha256/embedded-at) — re-embeds only on hash
+  change. Symbol graph: Python via `ast` (functions/classes/methods with
+  line + signature), 8 other languages via conservative regex. Dependency
+  graph (`workspace_imports`) with `dependents_of` reverse query.
+- `scan()` is incremental: only added/changed/removed files' subgraphs are
+  rewritten (acceptance-tested). Queries: `where_is`, `imports_of`,
+  `dependents_of`, `search_code`.
+
+### memory/long_term.py
+- `DecisionMemory` (rows + embedded for retrieval; "tried X, outcome Y")
+  and `ProjectMemory` (key/value facts with provenance).
+
+### memory/compression.py
+- `CompressedSummary` structured shape (result/decisions[]/files_touched[]/
+  open_questions[]), `HeuristicSummarizer` + `LLMSummarizer` (hard fallback
+  so compression never kills a task), `TranscriptStore` (full transcripts
+  externalized, `full_log_ref` wired), `mid_task_compress`.
+
+### memory/working_memory.py + memory/retrieval.py
+- Minimal assembly rule enforced in code (goal + parent summary + retrieval
+  only). `ContextPressureMonitor` fires mid-task compression at 70% of the
+  window. `Retriever.gather` merges project/decision/workspace sources,
+  deduped, capped.
+
 ## Test status
 
-`python3 -m unittest discover -s tests -t . -v` → **35 tests, OK**
+`python3 -m unittest discover -s tests -t . -v` → **68 tests, OK**
 (also clean under `-W error::ResourceWarning`).
 
 Suite map: `tests/` — task_graph (9), event_bus (8), hard_gate (6),
-recovery (6), provider (5), scheduler_resume acceptance (1).
+recovery (6), provider (5), scheduler_resume acceptance (1),
+vector_store (6), workspace_indexer (6), compression (8), working_memory (5),
+long_task bounded-context acceptance (1), plus embedded Phase 1/2
+integration coverage.
 
 ## Acceptance criteria (spec §10, Phase 1)
 
 | Criterion | Where proven |
 |-----------|--------------|
-| Kill/restart mid-task → resume, no re-prompt | `tests/test_scheduler_resume.py` (real `kill -9` on subprocess) |
-| Event survives a bus restart | `tests/test_event_bus.py::test_event_survives_bus_restart_unacked` + the acceptance test's post-kill event assertions |
+| **P1**: Kill/restart mid-task → resume, no re-prompt | `tests/test_scheduler_resume.py` (real `kill -9` on subprocess) |
+| **P1**: Event survives a bus restart | `tests/test_event_bus.py::test_event_survives_bus_restart_unacked` |
+| **P2**: Long task forces compression; active context stays bounded | `tests/test_memory_integration.py` (40-turn task, 400-token window, 3+ compressions, all post-compression ratios < threshold) |
+| **P2**: Indexer updates only the changed file's subgraph | `tests/test_workspace_indexer.py::test_acceptance_only_changed_files_subgraph_updates` |
 
-Both pass. Phase 2 is unblocked.
+All pass. Phase 3 is unblocked.
